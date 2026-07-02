@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0e17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <title>盯盘助手</title>
+    <style>
+        :root {
+            --bg:#0a0e17;--bg2:#111827;--bg3:#1a2236;--border:#1e293b;
+            --text:#e2e8f0;--text2:#94a3b8;
+            --red:#ef4444;--red-bg:rgba(239,68,68,.12);
+            --green:#22c55e;--green-bg:rgba(34,197,94,.12);
+            --accent:#6366f1;
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+        .header{position:sticky;top:0;z-index:100;background:rgba(10,14,23,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+        .header h1{font-size:18px;font-weight:700;background:linear-gradient(135deg,#6366f1,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .header-right{display:flex;align-items:center;gap:10px}
+        .auto-refresh{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)}
+        .auto-refresh .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        .refresh-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer}
+        .refresh-btn:active{background:var(--accent);color:#fff}
+        .tabs{display:flex;background:var(--bg);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+        .tabs::-webkit-scrollbar{display:none}
+        .tab{padding:12px 16px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .2s}
+        .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+        .panel{display:none}.panel.active{display:block}
+        .indices-row{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none}
+        .indices-row::-webkit-scrollbar{display:none}
+        .index-card{flex:0 0 auto;min-width:120px;background:var(--bg2);border-radius:12px;padding:12px;border:1px solid var(--border);cursor:pointer;transition:transform .15s}
+        .index-card:active{transform:scale(.97)}
+        .index-card .idx-name{font-size:11px;color:var(--text2);margin-bottom:4px}
+        .index-card .idx-price{font-size:17px;font-weight:700;margin-bottom:2px}
+        .index-card .idx-change{font-size:12px;font-weight:500}
+        .index-card.up{border-color:rgba(239,68,68,.3)}
+        .index-card.down{border-color:rgba(34,197,94,.3)}
+        .section-header{padding:12px 16px 8px;font-size:13px;font-weight:600;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
+        .sort-btns{display:flex;gap:6px}
+        .sort-btn{padding:4px 10px;border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);cursor:pointer}
+        .sort-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+        .sector-list{padding:0 8px}
+        .sector-item{display:grid;grid-template-columns:1fr auto auto;align-items:center;padding:12px;margin:4px 0;background:var(--bg2);border-radius:10px;border:1px solid var(--border);cursor:pointer;transition:all .15s;gap:8px}
+        .sector-item:active{background:var(--bg3);transform:scale(.99)}
+        .sector-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+        .sector-count{font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px}
+        .sector-lead{font-size:11px;color:var(--text2);margin-top:2px}
+        .sector-price{font-size:13px;text-align:right}
+        .sector-change{font-size:14px;font-weight:700;text-align:center;padding:4px 10px;border-radius:6px;min-width:72px}
+        .up{color:var(--red)}.down{color:var(--green)}.flat{color:var(--text2)}
+        .sector-change.up{background:var(--red-bg)}.sector-change.down{background:var(--green-bg)}
+        .flow-item{display:grid;grid-template-columns:1fr auto;padding:12px;margin:4px 8px;background:var(--bg2);border-radius:10px;border:1px solid var(--border);gap:8px}
+        .flow-bar-container{height:4px;background:var(--bg3);border-radius:2px;margin-top:6px;overflow:hidden}
+        .flow-bar{height:100%;border-radius:2px;transition:width .5s}
+        .flow-bar.inflow{background:linear-gradient(90deg,#ef4444,#f87171)}
+        .flow-bar.outflow{background:linear-gradient(90deg,#22c55e,#4ade80)}
+        .flow-amount{font-size:14px;font-weight:700}
+        .flow-sub{font-size:11px;color:var(--text2);margin-top:2px}
+        .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
+        .modal-overlay.show{display:flex}
+        .modal{background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;padding:20px 16px;animation:slideUp .25s ease-out}
+        @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+        .modal-title{font-size:18px;font-weight:700;margin-bottom:4px}
+        .modal-code{font-size:13px;color:var(--text2);margin-bottom:16px}
+        .modal-price-row{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+        .modal-price{font-size:32px;font-weight:800}
+        .modal-change{font-size:16px;font-weight:600;padding:4px 10px;border-radius:6px}
+        .modal-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+        .stat-box{background:var(--bg3);border-radius:10px;padding:12px}
+        .stat-label{font-size:11px;color:var(--text2);margin-bottom:4px}
+        .stat-value{font-size:16px;font-weight:600}
+        .modal-close{position:absolute;top:16px;right:16px;background:var(--bg3);border:none;color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+        .search-bar{padding:8px 16px;background:var(--bg);position:relative}
+        .search-input{width:100%;padding:10px 16px 10px 40px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px center}
+        .search-input:focus{border-color:var(--accent)}
+        .search-results{position:absolute;z-index:200;background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-top:4px;left:16px;right:16px;display:none;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+        .search-results.show{display:block}
+        .search-item{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+        .search-item:last-child{border-bottom:none}
+        .search-item:active{background:var(--bg3)}
+        .search-item .name{font-size:14px;font-weight:500}
+        .search-item .code{font-size:12px;color:var(--text2)}
+        .stock-row{display:grid;grid-template-columns:1fr auto auto;padding:10px 12px;margin:3px 0;background:var(--bg2);border-radius:8px;border:1px solid var(--border);gap:8px;align-items:center;cursor:pointer}
+        .stock-row:active{background:var(--bg3)}
+        .stock-name{font-size:14px;font-weight:500}
+        .stock-code{font-size:11px;color:var(--text2)}
+        .stock-price{font-size:13px;text-align:right}
+        .stock-change{font-size:13px;font-weight:600;text-align:center;padding:3px 8px;border-radius:5px;min-width:65px}
+        .stock-change.up{background:var(--red-bg);color:var(--red)}
+        .stock-change.down{background:var(--green-bg);color:var(--green)}
+        .hot-item{display:grid;grid-template-columns:40px 1fr auto auto;padding:10px 12px;margin:3px 8px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);gap:8px;align-items:center;cursor:pointer}
+        .hot-item:active{background:var(--bg3)}
+        .hot-rank{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+        .hot-rank.top{background:var(--red);color:#fff}
+        .hot-rank.normal{background:var(--bg3);color:var(--text2)}
+        .loading{display:flex;justify-content:center;padding:40px}
+        .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .empty{text-align:center;padding:40px 16px;color:var(--text2)}
+        .empty-icon{font-size:40px;margin-bottom:12px}
+        .sector-detail{padding:0 8px}
+        .gh-badge{position:fixed;bottom:16px;right:16px;background:var(--bg3);border:1px solid var(--border);padding:6px 12px;border-radius:8px;font-size:10px;color:var(--text2);z-index:50}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📈 盯盘助手</h1>
+        <div class="header-right">
+            <div class="auto-refresh"><span class="dot"></span><span id="autoStatus">自动刷新</span></div>
+            <button class="refresh-btn" onclick="refreshAll()">刷新</button>
+        </div>
+    </div>
+    <div class="search-bar">
+        <input class="search-input" id="searchInput" placeholder="搜索股票代码或名称..." autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+    </div>
+    <div class="tabs" id="tabs">
+        <div class="tab active" data-tab="sectors">板块行情</div>
+        <div class="tab" data-tab="flow">资金流向</div>
+        <div class="tab" data-tab="hot">涨幅榜</div>
+        <div class="tab" data-tab="detail">板块详情</div>
+    </div>
+    <div class="panel active" id="panel-sectors">
+        <div class="indices-row" id="indices"></div>
+        <div class="section-header">
+            <span>行业板块</span>
+            <div class="sort-btns">
+                <div class="sort-btn active" data-sort="changePct">涨跌幅</div>
+                <div class="sort-btn" data-sort="turnover">成交额</div>
+            </div>
+        </div>
+        <div class="sector-list" id="sectorList"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="panel" id="panel-flow">
+        <div class="section-header"><span>主力资金流向</span></div>
+        <div id="flowList"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="panel" id="panel-hot">
+        <div class="section-header"><span>今日涨幅榜 TOP 20</span></div>
+        <div id="hotList"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="panel" id="panel-detail">
+        <div class="section-header" id="detailHeader"><span>点击板块查看成分股</span></div>
+        <div class="sector-detail" id="detailList">
+            <div class="empty"><div class="empty-icon">📊</div><div>请先选择一个板块</div></div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="stockModal">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-handle"></div>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <div class="modal-title" id="modalName">-</div>
+            <div class="modal-code" id="modalCode">-</div>
+            <div class="modal-price-row">
+                <span class="modal-price" id="modalPrice">-</span>
+                <span class="modal-change" id="modalChange">-</span>
+            </div>
+            <div class="modal-stats" id="modalStats"></div>
+        </div>
+    </div>
+
+<script>
+// ── JSONP Helper ──
+let _jsonpId = 0;
+function jsonp(url, callbackParam='cb') {
+    return new Promise((resolve, reject) => {
+        const id = '_jsonp_' + (++_jsonpId);
+        const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+        function cleanup() { clearTimeout(timer); delete window[id]; const s = document.getElementById(id); if (s) s.remove(); }
+        window[id] = (data) => { cleanup(); resolve(data); };
+        const sep = url.includes('?') ? '&' : '?';
+        const script = document.createElement('script');
+        script.id = id;
+        script.src = `${url}${sep}${callbackParam}=${id}`;
+        script.onerror = () => { cleanup(); reject(new Error('script error')); };
+        document.head.appendChild(script);
+    });
+}
+
+// ── Tencent uses variable assignment, not JSONP ──
+function fetchTencentQuote(codes) {
+    return new Promise((resolve, reject) => {
+        const id = '_tq_' + (++_jsonpId);
+        const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+        function cleanup() { clearTimeout(timer); const s = document.getElementById(id); if (s) s.remove(); }
+        const script = document.createElement('script');
+        script.id = id;
+        // Tencent returns: v_sh000001="1~上证指数~..."
+        // We use their JSONP callback
+        script.src = `https://qt.gtimg.cn/q=${codes}&_var=${id}&r=${Math.random()}`;
+        script.onload = () => {
+            try {
+                const raw = window[id];
+                cleanup();
+                if (typeof raw === 'string') {
+                    // Parse the raw string
+                    const results = [];
+                    const lines = raw.split(';').filter(l => l.includes('"'));
+                    for (const line of lines) {
+                        const m = line.match(/"(.+)"/);
+                        if (!m) continue;
+                        const parts = m[1].split('~');
+                        if (parts.length < 45) continue;
+                        results.push({
+                            code: parts[2], name: parts[1],
+                            price: +parts[3]||0, prevClose: +parts[4]||0, open: +parts[5]||0,
+                            change: +parts[31]||0, changePct: +parts[32]||0,
+                            high: +parts[33]||0, low: +parts[34]||0,
+                            volume: +parts[36]||0, turnover: +parts[37]||0,
+                            pe: parts[39]||'-', marketCap: parts[45]||'-', time: parts[30]||''
+                        });
+                    }
+                    resolve(results);
+                } else { resolve([]); }
+            } catch(e) { cleanup(); reject(e); }
+        };
+        script.onerror = () => { cleanup(); reject(new Error('fail')); };
+        document.head.appendChild(script);
+    });
+}
+
+// Fallback: load tencent as plain script
+function fetchTencent(codes) {
+    return new Promise((resolve, reject) => {
+        const id = '_tq_' + (++_jsonpId);
+        const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+        function cleanup() { clearTimeout(timer); const s = document.getElementById(id); if (s) s.remove(); }
+        window[id] = undefined;
+        const script = document.createElement('script');
+        script.id = id;
+        script.src = `https://qt.gtimg.cn/q=${codes}`;
+        script.onload = () => {
+            try {
+                // The script sets variables like v_sh000001="..."
+                // We need to eval the content to get the values
+                // Instead, let's just re-fetch using a different approach
+                cleanup();
+                // Try fetching with XMLHttpRequest
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', `https://qt.gtimg.cn/q=${codes}`, true);
+                xhr.onload = () => {
+                    const results = [];
+                    const lines = xhr.responseText.split(';').filter(l => l.includes('"'));
+                    for (const line of lines) {
+                        const m = line.match(/"(.+)"/);
+                        if (!m) continue;
+                        const parts = m[1].split('~');
+                        if (parts.length < 45) continue;
+                        results.push({
+                            code: parts[2], name: parts[1],
+                            price: +parts[3]||0, prevClose: +parts[4]||0, open: +parts[5]||0,
+                            change: +parts[31]||0, changePct: +parts[32]||0,
+                            high: +parts[33]||0, low: +parts[34]||0,
+                            volume: +parts[36]||0, turnover: +parts[37]||0,
+                            pe: parts[39]||'-', marketCap: parts[45]||'-', time: parts[30]||''
+                        });
+                    }
+                    resolve(results);
+                };
+                xhr.onerror = () => reject(new Error('xhr fail'));
+                xhr.send();
+            } catch(e) { reject(e); }
+        };
+        script.onerror = () => { cleanup(); reject(new Error('fail')); };
+        document.head.appendChild(script);
+    });
+}
+
+// ── State ──
+let state = { sectors:[], indices:[], currentSort:'changePct', currentSectorCode:null };
+
+function fmt(n,d=2){if(n==null||isNaN(n))return'-';return Number(n).toFixed(d)}
+function fmtAmount(n){if(!n)return'-';const a=Math.abs(n);if(a>=1e8)return(n/1e8).toFixed(2)+'亿';if(a>=1e4)return(n/1e4).toFixed(2)+'万';return n.toFixed(0)}
+function cc(v){return v>0?'up':v<0?'down':'flat'}
+function sign(v){return v>0?'+':''}
+
+// ── Load Indices (Sina JSONP) ──
+async function loadIndices() {
+    try {
+        const codes = 'sh000001,sz399001,sz399006,sh000688,sh000300,sz399303';
+        const names = ['上证指数','深证成指','创业板指','科创50','沪深300','国证2000'];
+        // Use Sina hq API
+        const data = await jsonp(`https://hq.sinajs.cn/list=${codes}`, 'cb');
+        // data is not returned by JSONP, we need to parse the global vars
+        // Sina sets: var hq_str_sh000001="上证指数,4028.90,..."
+        // This doesn't work with JSONP callback, let's use a different approach
+    } catch(e) { console.error('indices error', e); }
+
+    // Alternative: use Sina's JSONP API for indices
+    try {
+        const results = [];
+        const idxCodes = [
+            {s:'sh000001',n:'上证指数'},{s:'sz399001',n:'深证成指'},
+            {s:'sz399006',n:'创业板指'},{s:'sh000688',n:'科创50'},
+            {s:'sh000300',n:'沪深300'},{s:'sz399303',n:'国证2000'}
+        ];
+        // Fetch each via script tag
+        for (const idx of idxCodes) {
+            try {
+                const r = await fetchIndex(idx.s, idx.n);
+                if (r) results.push(r);
+            } catch(e) {}
+        }
+        if (results.length) {
+            state.indices = results;
+            renderIndices();
+            return;
+        }
+    } catch(e) {}
+
+    // Final fallback: use ifeng or just show error
+    document.getElementById('indices').innerHTML = '<div style="padding:12px;color:var(--text2);font-size:13px">指数数据加载中...</div>';
+}
+
+async function fetchIndex(code, name) {
+    return new Promise((resolve) => {
+        const script = document.createElement('script');
+        const varName = 'hq_str_' + code;
+        script.src = `https://hq.sinajs.cn/list=${code}&_=${Date.now()}`;
+        script.onload = () => {
+            try {
+                const raw = window[varName];
+                if (!raw) { resolve(null); return; }
+                const parts = raw.split(',');
+                // Format: name,open,prevClose,price,high,low,...,volume,turnover,...
+                const price = +parts[3];
+                const prevClose = +parts[2];
+                const change = price - prevClose;
+                const changePct = prevClose ? (change/prevClose*100) : 0;
+                resolve({
+                    code, name: parts[0] || name,
+                    price, prevClose, open:+parts[1],
+                    change, changePct,
+                    high:+parts[4], low:+parts[5],
+                    volume:+parts[8], turnover:+parts[9],
+                    time: parts[30]||''
+                });
+            } catch(e) { resolve(null); }
+            script.remove();
+        };
+        script.onerror = () => { script.remove(); resolve(null); };
+        document.head.appendChild(script);
+    });
+}
+
+function renderIndices() {
+    const el = document.getElementById('indices');
+    el.innerHTML = state.indices.map(idx => `
+        <div class="index-card ${cc(idx.changePct)}">
+            <div class="idx-name">${idx.name}</div>
+            <div class="idx-price ${cc(idx.changePct)}">${fmt(idx.price)}</div>
+            <div class="idx-change ${cc(idx.changePct)}">${sign(idx.changePct)}${fmt(idx.changePct)}%</div>
+        </div>
+    `).join('');
+}
+
+// ── Load Sectors (Sina JSONP) ──
+async function loadSectors() {
+    try {
+        const data = await new Promise((resolve, reject) => {
+            const id = '_sec_' + (++_jsonpId);
+            const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+            function cleanup() { clearTimeout(timer); delete window[id]; const s = document.getElementById(id); if (s) s.remove(); }
+            window[id] = (raw) => { cleanup(); resolve(raw); };
+            const script = document.createElement('script');
+            script.id = id;
+            script.src = `https://vip.stock.finance.sina.com.cn/q/view/newSinaHy.php?callback=${id}`;
+            script.onerror = () => { cleanup(); reject(new Error('fail')); };
+            document.head.appendChild(script);
+        });
+        // data is the JSON object
+        const sectors = [];
+        for (const [k, v] of Object.entries(data)) {
+            const parts = v.split(',');
+            if (parts.length < 13) continue;
+            sectors.push({
+                code:parts[0], name:parts[1], stockCount:+parts[2]||0,
+                avgPrice:+parts[3]||0, change:+parts[4]||0, changePct:+parts[5]||0,
+                volume:+parts[6]||0, turnover:+parts[7]||0,
+                leadStockCode:parts[8], leadStockChangePct:+parts[9]||0,
+                leadStockPrice:+parts[10]||0, leadStockChange:+parts[11]||0,
+                leadStockName:parts[12]
+            });
+        }
+        sectors.sort((a,b) => Math.abs(b.changePct)-Math.abs(a.changePct));
+        state.sectors = sectors;
+        const now = new Date();
+        document.getElementById('autoStatus').textContent = `更新 ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        renderSectors();
+    } catch(e) {
+        console.error('sectors error', e);
+        document.getElementById('sectorList').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div>数据加载失败，请刷新重试</div></div>';
+    }
+}
+
+function renderSectors() {
+    const sorted = [...state.sectors];
+    if (state.currentSort==='turnover') sorted.sort((a,b)=>b.turnover-a.turnover);
+    else sorted.sort((a,b)=>Math.abs(b.changePct)-Math.abs(a.changePct));
+    document.getElementById('sectorList').innerHTML = sorted.map(s => `
+        <div class="sector-item" onclick="openSector('${s.code}','${s.name}')">
+            <div>
+                <div class="sector-name">${s.name}<span class="sector-count">${s.stockCount}只</span></div>
+                <div class="sector-lead">领涨：${s.leadStockName} ${sign(s.leadStockChangePct)}${fmt(s.leadStockChangePct)}%</div>
+            </div>
+            <div class="sector-price"><div>${fmt(s.avgPrice)}</div><div style="font-size:11px;color:var(--text2)">成交 ${fmtAmount(s.turnover)}</div></div>
+            <div class="sector-change ${cc(s.changePct)}">${sign(s.changePct)}${fmt(s.changePct)}%</div>
+        </div>
+    `).join('');
+}
+
+// ── Sector Detail ──
+async function openSector(code, name) {
+    switchTab('detail');
+    state.currentSectorCode = code;
+    document.getElementById('detailHeader').innerHTML = `<span>${name} · 成分股</span>`;
+    document.getElementById('detailList').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+        const data = await new Promise((resolve, reject) => {
+            const id = '_sd_' + (++_jsonpId);
+            const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+            function cleanup() { clearTimeout(timer); delete window[id]; const s = document.getElementById(id); if (s) s.remove(); }
+            window[id] = (raw) => { cleanup(); resolve(raw); };
+            const script = document.createElement('script');
+            script.id = id;
+            script.src = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=50&sort=changepercent&asc=0&node=${code}&symbol=&_s_r_a=page&callback=${id}`;
+            script.onerror = () => { cleanup(); reject(new Error('fail')); };
+            document.head.appendChild(script);
+        });
+        if (!data || !data.length) {
+            document.getElementById('detailList').innerHTML = '<div class="empty"><div class="empty-icon">😴</div><div>暂无数据</div></div>';
+            return;
+        }
+        document.getElementById('detailList').innerHTML = data.map(s => {
+            const c = s.code.startsWith('6') ? 'sh' : 'sz';
+            const changePct = +s.changepercent || 0;
+            return `<div class="stock-row" onclick="openStockFull('${c}${s.code}','${s.name}')">
+                <div><div class="stock-name">${s.name}</div><div class="stock-code">${s.code}</div></div>
+                <div class="stock-price ${cc(changePct)}">${fmt(+s.trade)}</div>
+                <div class="stock-change ${cc(changePct)}">${sign(changePct)}${fmt(changePct)}%</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('detailList').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div>加载失败</div></div>';
+    }
+}
+
+// ── Money Flow ──
+async function loadMoneyFlow() {
+    try {
+        const data = await new Promise((resolve, reject) => {
+            const id = '_mf_' + (++_jsonpId);
+            const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+            function cleanup() { clearTimeout(timer); delete window[id]; const s = document.getElementById(id); if (s) s.remove(); }
+            window[id] = (raw) => { cleanup(); resolve(raw); };
+            const script = document.createElement('script');
+            script.id = id;
+            script.src = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_bkzj_bk?page=1&num=20&sort=netamount&asc=0&fenlei=1&callback=${id}`;
+            script.onerror = () => { cleanup(); reject(new Error('fail')); };
+            document.head.appendChild(script);
+        });
+        const el = document.getElementById('flowList');
+        if (!data || !data.length) {
+            el.innerHTML = '<div class="empty"><div class="empty-icon">💰</div><div>暂无资金流向数据</div></div>';
+            return;
+        }
+        const maxAbs = Math.max(...data.map(d => Math.abs(+d.netamount||0)));
+        el.innerHTML = data.map(d => {
+            const net = +d.netamount||0;
+            const buy = +d.r0_net||0;
+            const sell = +d.r3_net||0;
+            const pct = Math.min(Math.abs(net)/maxAbs*100, 100);
+            const inf = net > 0;
+            return `<div class="flow-item">
+                <div>
+                    <div style="font-size:14px;font-weight:600">${d.name}</div>
+                    <div class="flow-bar-container"><div class="flow-bar ${inf?'inflow':'outflow'}" style="width:${pct}%"></div></div>
+                    <div class="flow-sub">主力 ${fmtAmount(buy)} · 散户 ${fmtAmount(sell)}</div>
+                </div>
+                <div class="flow-amount ${cc(net)}">${sign(net)}${fmtAmount(net)}</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('flowList').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div>加载失败</div></div>';
+    }
+}
+
+// ── Hot Stocks ──
+async function loadHot() {
+    try {
+        const data = await new Promise((resolve, reject) => {
+            const id = '_hot_' + (++_jsonpId);
+            const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+            function cleanup() { clearTimeout(timer); delete window[id]; const s = document.getElementById(id); if (s) s.remove(); }
+            window[id] = (raw) => { cleanup(); resolve(raw); };
+            const script = document.createElement('script');
+            script.id = id;
+            script.src = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=20&sort=changepercent&asc=0&node=hs_a&symbol=&_s_r_a=page&callback=${id}`;
+            script.onerror = () => { cleanup(); reject(new Error('fail')); };
+            document.head.appendChild(script);
+        });
+        const el = document.getElementById('hotList');
+        if (!data || !data.length) {
+            el.innerHTML = '<div class="empty"><div class="empty-icon">🔥</div><div>暂无数据</div></div>';
+            return;
+        }
+        el.innerHTML = data.map((s,i) => {
+            const c = s.code.startsWith('6') ? 'sh' : 'sz';
+            const changePct = +s.changepercent||0;
+            return `<div class="hot-item" onclick="openStockFull('${c}${s.code}','${s.name}')">
+                <div class="hot-rank ${i<3?'top':'normal'}">${i+1}</div>
+                <div><div class="stock-name">${s.name}</div><div class="stock-code">${s.code}</div></div>
+                <div class="stock-price ${cc(changePct)}">${fmt(+s.trade)}</div>
+                <div class="stock-change ${cc(changePct)}">${sign(changePct)}${fmt(changePct)}%</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('hotList').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div>加载失败</div></div>';
+    }
+}
+
+// ── Stock Detail Modal ──
+async function openStockFull(fullCode, name) {
+    document.getElementById('stockModal').classList.add('show');
+    document.getElementById('modalName').textContent = name || '加载中...';
+    document.getElementById('modalCode').textContent = fullCode;
+    document.getElementById('modalPrice').textContent = '-';
+    document.getElementById('modalChange').textContent = '-';
+    document.getElementById('modalStats').innerHTML = '';
+
+    try {
+        const results = await fetchTencent(fullCode);
+        if (!results || !results.length) {
+            document.getElementById('modalName').textContent = '未找到';
+            return;
+        }
+        const d = results[0];
+        const cls = cc(d.changePct);
+        document.getElementById('modalName').textContent = d.name;
+        document.getElementById('modalCode').textContent = d.code;
+        const pe = document.getElementById('modalPrice');
+        pe.textContent = fmt(d.price); pe.className = 'modal-price ' + cls;
+        const ce = document.getElementById('modalChange');
+        ce.textContent = `${sign(d.changePct)}${fmt(d.changePct)}%  ${sign(d.change)}${fmt(d.change)}`;
+        ce.className = 'modal-change ' + cls;
+        ce.style.background = cls==='up'?'var(--red-bg)':cls==='down'?'var(--green-bg)':'transparent';
+        document.getElementById('modalStats').innerHTML = `
+            <div class="stat-box"><div class="stat-label">今开</div><div class="stat-value">${fmt(d.open)}</div></div>
+            <div class="stat-box"><div class="stat-label">昨收</div><div class="stat-value">${fmt(d.prevClose)}</div></div>
+            <div class="stat-box"><div class="stat-label">最高</div><div class="stat-value ${cc(d.high-d.prevClose)}">${fmt(d.high)}</div></div>
+            <div class="stat-box"><div class="stat-label">最低</div><div class="stat-value ${cc(d.low-d.prevClose)}">${fmt(d.low)}</div></div>
+            <div class="stat-box"><div class="stat-label">成交量</div><div class="stat-value">${fmtAmount(d.volume)}手</div></div>
+            <div class="stat-box"><div class="stat-label">成交额</div><div class="stat-value">${fmtAmount(d.turnover)}</div></div>
+            <div class="stat-box"><div class="stat-label">市盈率</div><div class="stat-value">${d.pe||'-'}</div></div>
+            <div class="stat-box"><div class="stat-label">总市值</div><div class="stat-value">${d.marketCap?fmtAmount(+d.marketCap):'-'}</div></div>
+        `;
+    } catch(e) {
+        document.getElementById('modalName').textContent = '加载失败';
+    }
+}
+
+function closeModal() { document.getElementById('stockModal').classList.remove('show'); }
+document.getElementById('stockModal').addEventListener('click', function(e) { if (e.target===this) closeModal(); });
+
+// ── Search ──
+let searchTimer = null;
+document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    const q = this.value.trim();
+    if (!q) { document.getElementById('searchResults').classList.remove('show'); return; }
+    searchTimer = setTimeout(async () => {
+        try {
+            const data = await new Promise((resolve, reject) => {
+                const id = '_sr_' + (++_jsonpId);
+                const timer = setTimeout(() => { cleanup(); resolve([]); }, 5000);
+                function cleanup() { clearTimeout(timer); delete window[id]; const s = document.getElementById(id); if (s) s.remove(); }
+                window[id] = (raw) => { cleanup(); resolve(raw); };
+                const script = document.createElement('script');
+                script.id = id;
+                script.src = `https://suggest3.sinajs.cn/suggest/type=&key=${encodeURIComponent(q)}&name=${id}`;
+                script.onerror = () => { cleanup(); resolve([]); };
+                document.head.appendChild(script);
+            });
+            // Parse suggest data: "code1,name1,type1,market1,code2,...;..."
+            const el = document.getElementById('searchResults');
+            if (typeof data !== 'string' || !data) { el.classList.remove('show'); return; }
+            const items = data.split(';').filter(Boolean);
+            const results = [];
+            for (const item of items) {
+                const p = item.split(',');
+                if (p.length >= 5 && (p[3]==='sh'||p[3]==='sz') && /^\d{6}$/.test(p[4])) {
+                    results.push({ code: p[3]+p[4], name: p[1] });
+                }
+            }
+            if (!results.length) { el.classList.remove('show'); return; }
+            el.innerHTML = results.slice(0,8).map(s =>
+                `<div class="search-item" onclick="searchPick('${s.code}','${s.name}')"><span class="name">${s.name}</span><span class="code">${s.code}</span></div>`
+            ).join('');
+            el.classList.add('show');
+        } catch(e) {}
+    }, 300);
+});
+function searchPick(code, name) {
+    document.getElementById('searchResults').classList.remove('show');
+    document.getElementById('searchInput').value = '';
+    openStockFull(code, name);
+}
+document.addEventListener('click', e => { if (!e.target.closest('.search-bar')) document.getElementById('searchResults').classList.remove('show'); });
+
+// ── Tabs ──
+document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===name));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id===`panel-${name}`));
+    if (name==='flow') loadMoneyFlow();
+    if (name==='hot') loadHot();
+}
+
+// ── Sort ──
+document.querySelectorAll('.sort-btn').forEach(btn => btn.addEventListener('click', function() {
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    state.currentSort = this.dataset.sort;
+    renderSectors();
+}));
+
+// ── Refresh ──
+async function refreshAll() {
+    await Promise.all([loadIndices(), loadSectors()]);
+    const tab = document.querySelector('.tab.active')?.dataset.tab;
+    if (tab==='flow') loadMoneyFlow();
+    if (tab==='hot') loadHot();
+}
+
+// ── Init ──
+refreshAll();
+setInterval(() => {
+    const now = new Date();
+    const h = now.getHours(), m = now.getMinutes();
+    const trading = (h===9&&m>=30)||(h>=10&&h<11)||(h===11&&m<=30)||(h>=13&&h<15);
+    if (trading) refreshAll();
+}, 30000);
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
